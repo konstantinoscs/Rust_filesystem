@@ -63,3 +63,5 @@ pub mod f_indirect_inodes;
 pub mod g_caching_inodes;
 
 // Declare additional modules below or declare them in other modules.
+/// the generic error type
+pub mod error_fs;

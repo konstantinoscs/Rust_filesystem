@@ -26,7 +26,7 @@
 #![allow(unused_imports)]
 // We import std::error and std::format so we can say error::Error instead of
 // std::error::Error, etc.
-use std:: { error, fmt, path::Path};
+use std::{ error, fmt, path::Path};
 
 // If you want to import things from the API crate, do so as follows:
 use cplfs_api::fs::FileSysSupport;
@@ -34,22 +34,27 @@ use cplfs_api::fs::BlockSupport;
 use cplfs_api::types::{Block, Inode, SuperBlock};
 use cplfs_api::controller::Device;
 
+use super::error_fs::APIError;
+
 /// You are free to choose the name for your file system. As we will use
 /// automated tests when grading your assignment, indicate here the name of
 /// your file system data type so we can just use `FSName` instead of
 /// having to manually figure out your file system name.
 /// **TODO**: replace the below type by the type of your file system
-pub type FSName = ();
+pub type FSName = BlockLayerFS;
 
 /// Struct representing the block layer
 #[derive(Debug)]
-pub struct BlockLayer {
-    /// Fake
-    pub something : u64,
+pub struct BlockLayerFS {
+    /// Size of the inode
+    pub inode_size: u32,
+
+    /// the encapsulated device
+    pub device: Device
 }
 
-impl FileSysSupport for BlockLayer {
-    type Error = u32;
+impl FileSysSupport for BlockLayerFS {
+    type Error = APIError;
 
     fn sb_valid(sb: &SuperBlock) -> bool {
         sb.inodestart == 1 && sb.inodestart < sb.bmapstart &&  sb.bmapstart < sb.datastart
@@ -57,17 +62,64 @@ impl FileSysSupport for BlockLayer {
     }
 
     fn mkfs<P: AsRef<Path>>(path: P, sb: &SuperBlock) -> Result<Self, Self::Error> {
+        let check = Self::sb_valid(sb);
 
+        match check {
+            false => Err(APIError::BlockInput("SuperBlock not valid")),
+            true =>  {
+                let device_res = Device::new(path, sb.block_size, sb.nblocks);
+                match device_res {
+                    Ok(device) => Ok(BlockLayerFS {
+                        inode_size: 0,
+                        device
+                    }),
+                    Err(_) => Err(APIError::BlockInput("Couldn't create device"))
+                }
+            }
+        }
     }
 
     fn mountfs(dev: Device) -> Result<Self, Self::Error> {
-
+        Ok(BlockLayerFS {
+            inode_size: 0,
+            device: dev
+        })
     }
 
     fn unmountfs(self) -> Device {
-
+        self.device
     }
     
+}
+
+impl BlockSupport for BlockLayerFS {
+    fn b_get(&self, i: u64) -> Result<Block, Self::Error> {
+        unimplemented!()
+    }
+
+    fn b_put(&mut self, b: &Block) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    fn b_free(&mut self, i: u64) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    fn b_zero(&mut self, i: u64) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    fn b_alloc(&mut self) -> Result<u64, Self::Error> {
+        unimplemented!()
+    }
+
+    fn sup_get(&self) -> Result<SuperBlock, Self::Error> {
+        unimplemented!()
+    }
+
+    fn sup_put(&mut self, sup: &SuperBlock) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
 }
 
 // Here we define a submodule, called `my_tests`, that will contain your unit
