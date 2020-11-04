@@ -1,0 +1,27 @@
+[package]
+name = "cplfs_sol"
+version = "0.1.0"
+authors = ["Thomas Van Strydonck <Thomas.VanStrydonck@cs.kuleuven.be>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies.cplfs_api]
+path = "../api"
+version = "*"
+
+[dependencies]
+anyhow = "1.0.33" #Blanket error handling
+thiserror = "1.0.21" #Concise error definitions, avoiding boilerplate
+
+[features]
+# A feature with no dependencies is used mainly for conditional compilation,
+# like `#[cfg(feature = "all")]`.
+all = []
+a = []
+b = []
+c = []
+d = []
+e = []
+f = []
+g = []
