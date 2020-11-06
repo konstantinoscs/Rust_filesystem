@@ -34,7 +34,7 @@ use cplfs_api::fs::BlockSupport;
 use cplfs_api::types::{Block, Inode, SuperBlock};
 use cplfs_api::controller::Device;
 
-use super::error_fs::APIError;
+use super::error_fs::BlockLayerError;
 
 /// You are free to choose the name for your file system. As we will use
 /// automated tests when grading your assignment, indicate here the name of
@@ -54,8 +54,9 @@ pub struct BlockLayerFS {
 }
 
 impl FileSysSupport for BlockLayerFS {
-    type Error = APIError;
+    type Error = BlockLayerError;
 
+    //TODO: check with the size of the inode
     fn sb_valid(sb: &SuperBlock) -> bool {
         sb.inodestart == 1 && sb.inodestart < sb.bmapstart &&  sb.bmapstart < sb.datastart
         && sb.datastart < sb.nblocks - sb.ndatablocks
@@ -65,16 +66,13 @@ impl FileSysSupport for BlockLayerFS {
         let check = Self::sb_valid(sb);
 
         match check {
-            false => Err(APIError::BlockInput("SuperBlock not valid")),
+            false => Err(BlockLayerError::BlockLayerInput("SuperBlock not valid")),
             true =>  {
-                let device_res = Device::new(path, sb.block_size, sb.nblocks);
-                match device_res {
-                    Ok(device) => Ok(BlockLayerFS {
-                        inode_size: 0,
-                        device
-                    }),
-                    Err(_) => Err(APIError::BlockInput("Couldn't create device"))
-                }
+                let device = Device::new(path, sb.block_size, sb.nblocks)?;
+                Ok(BlockLayerFS {
+                    inode_size: 0,
+                    device
+                })
             }
         }
     }
@@ -94,7 +92,7 @@ impl FileSysSupport for BlockLayerFS {
 
 impl BlockSupport for BlockLayerFS {
     fn b_get(&self, i: u64) -> Result<Block, Self::Error> {
-        unimplemented!()
+        Ok(self.device.read_block(i)?)
     }
 
     fn b_put(&mut self, b: &Block) -> Result<(), Self::Error> {
