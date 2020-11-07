@@ -31,7 +31,7 @@ use std::{ error, fmt, path::Path};
 // If you want to import things from the API crate, do so as follows:
 use cplfs_api::fs::FileSysSupport;
 use cplfs_api::fs::BlockSupport;
-use cplfs_api::types::{Block, Inode, SuperBlock};
+use cplfs_api::types::{Block, Inode, SuperBlock, DINODE_SIZE };
 use cplfs_api::controller::Device;
 
 use super::error_fs::BlockLayerError;
@@ -46,8 +46,8 @@ pub type FSName = BlockLayerFS;
 /// Struct representing the block layer
 #[derive(Debug)]
 pub struct BlockLayerFS {
-    /// Size of the inode
-    pub inode_size: u32,
+    ///the SuperBlock for fast access
+    super_block: SuperBlock,
 
     /// the encapsulated device
     pub device: Device
@@ -58,8 +58,11 @@ impl FileSysSupport for BlockLayerFS {
 
     //TODO: check with the size of the inode
     fn sb_valid(sb: &SuperBlock) -> bool {
-        sb.inodestart == 1 && sb.inodestart < sb.bmapstart &&  sb.bmapstart < sb.datastart
-        && sb.datastart < sb.nblocks - sb.ndatablocks
+        let inode_blocks = ((*DINODE_SIZE *sb.ninodes) as f64/sb.block_size as f64).ceil() as u64;
+        sb.inodestart == 1 &&
+            sb.inodestart + inode_blocks < sb.bmapstart &&
+            sb.bmapstart < sb.datastart &&
+            sb.datastart < sb.nblocks - sb.ndatablocks + 1
     }
 
     fn mkfs<P: AsRef<Path>>(path: P, sb: &SuperBlock) -> Result<Self, Self::Error> {
@@ -68,9 +71,12 @@ impl FileSysSupport for BlockLayerFS {
         match check {
             false => Err(BlockLayerError::BlockLayerInput("SuperBlock not valid")),
             true =>  {
-                let device = Device::new(path, sb.block_size, sb.nblocks)?;
+                let mut device = Device::new(path, sb.block_size, sb.nblocks)?;
+                let mut super_block = Block::new_zero(0, sb.block_size);
+                super_block.serialize_into(sb, 0)?;
+                device.write_block(&super_block)?;
                 Ok(BlockLayerFS {
-                    inode_size: 0,
+                    super_block: SuperBlock::from(*sb),
                     device
                 })
             }
@@ -78,8 +84,10 @@ impl FileSysSupport for BlockLayerFS {
     }
 
     fn mountfs(dev: Device) -> Result<Self, Self::Error> {
+        let sblock = dev.read_block(0)?;
+        let super_block = sblock.deserialize_from::<SuperBlock>(0)?;
         Ok(BlockLayerFS {
-            inode_size: 0,
+            super_block,
             device: dev
         })
     }
@@ -96,10 +104,13 @@ impl BlockSupport for BlockLayerFS {
     }
 
     fn b_put(&mut self, b: &Block) -> Result<(), Self::Error> {
-        unimplemented!()
+        Ok(self.device.write_block(b)?)
     }
 
     fn b_free(&mut self, i: u64) -> Result<(), Self::Error> {
+        //get bitmap starting address, divide i/blocksize and then
+        //let  = self.b_get()
+        //self.device.
         unimplemented!()
     }
 
@@ -112,11 +123,15 @@ impl BlockSupport for BlockLayerFS {
     }
 
     fn sup_get(&self) -> Result<SuperBlock, Self::Error> {
-        unimplemented!()
+        return Ok(self.super_block);
     }
 
     fn sup_put(&mut self, sup: &SuperBlock) -> Result<(), Self::Error> {
-        unimplemented!()
+        let mut super_block = Block::new_zero(0, sup.block_size);
+        super_block.serialize_into(sup, 0);
+        self.device.write_block(&super_block)?;
+        self.super_block = SuperBlock::from(*sup);
+        Ok(())
     }
 }
 
