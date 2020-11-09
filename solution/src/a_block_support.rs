@@ -33,7 +33,7 @@ use cplfs_api::fs::FileSysSupport;
 use cplfs_api::fs::BlockSupport;
 use cplfs_api::types::{Block, Inode, SuperBlock, DINODE_SIZE };
 use cplfs_api::controller::Device;
-use bit_field::BitArray;
+use bit_field::BitField;
 
 use super::error_fs::BlockLayerError;
 
@@ -119,12 +119,12 @@ impl BlockSupport for BlockLayerFS {
         //get bitmap starting address, divide i/blocksize and then
         let mut target_block = self.b_get(block_addr)?;
         //byte that will contain the bit we want to change
-        let mut byte : [u8; 1] = Default::default();
-        target_block.read_data(&mut byte, target_byte)?;
-        byte.set_bit(target_bit as usize, false);
+        let mut byte_slice : [u8; 1] = Default::default();
+        target_block.read_data(&mut byte_slice, target_byte)?;
+        byte_slice.first_mut().unwrap().set_bit(target_bit as usize, false);
 
         //write back
-        target_block.write_data(&byte, target_byte)?;
+        target_block.write_data(&byte_slice, target_byte)?;
         self.b_put(&target_block)?;
         Ok(())
     }
