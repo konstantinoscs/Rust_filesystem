@@ -13,6 +13,7 @@ version = "*"
 [dependencies]
 anyhow = "1.0.33" #Blanket error handling
 thiserror = "1.0.21" #Concise error definitions, avoiding boilerplate
+bit_field = "0.10.1" #bit manipulation
 
 [features]
 # A feature with no dependencies is used mainly for conditional compilation,

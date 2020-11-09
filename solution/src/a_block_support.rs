@@ -33,6 +33,7 @@ use cplfs_api::fs::FileSysSupport;
 use cplfs_api::fs::BlockSupport;
 use cplfs_api::types::{Block, Inode, SuperBlock, DINODE_SIZE };
 use cplfs_api::controller::Device;
+use bit_field::BitArray;
 
 use super::error_fs::BlockLayerError;
 
@@ -56,7 +57,6 @@ pub struct BlockLayerFS {
 impl FileSysSupport for BlockLayerFS {
     type Error = BlockLayerError;
 
-    //TODO: check with the size of the inode
     fn sb_valid(sb: &SuperBlock) -> bool {
         let inode_blocks = ((*DINODE_SIZE *sb.ninodes) as f64/sb.block_size as f64).ceil() as u64;
         sb.inodestart == 1 &&
@@ -66,9 +66,7 @@ impl FileSysSupport for BlockLayerFS {
     }
 
     fn mkfs<P: AsRef<Path>>(path: P, sb: &SuperBlock) -> Result<Self, Self::Error> {
-        let check = Self::sb_valid(sb);
-
-        match check {
+        match Self::sb_valid(sb) {
             false => Err(BlockLayerError::BlockLayerInput("SuperBlock not valid")),
             true =>  {
                 let mut device = Device::new(path, sb.block_size, sb.nblocks)?;
@@ -86,10 +84,13 @@ impl FileSysSupport for BlockLayerFS {
     fn mountfs(dev: Device) -> Result<Self, Self::Error> {
         let sblock = dev.read_block(0)?;
         let super_block = sblock.deserialize_from::<SuperBlock>(0)?;
-        Ok(BlockLayerFS {
-            super_block,
-            device: dev
-        })
+        match Self::sb_valid(&super_block) {
+            false => Err(BlockLayerError::BlockLayerInput("SuperBlock not valid")),
+            true => Ok(BlockLayerFS {
+                super_block,
+                device: dev
+            })
+        }
     }
 
     fn unmountfs(self) -> Device {
@@ -108,10 +109,24 @@ impl BlockSupport for BlockLayerFS {
     }
 
     fn b_free(&mut self, i: u64) -> Result<(), Self::Error> {
+        let byte_size = 8;
+        let block_addr =  self.super_block.bmapstart + i/(self.super_block.block_size*byte_size);
+        //how many bits inside the target block we have to look
+        let block_offset_bit = i % (self.super_block.block_size*byte_size);
+        //offset of the byte inside the target_block
+        let target_byte = block_offset_bit/byte_size;
+        let target_bit = block_offset_bit % byte_size;
         //get bitmap starting address, divide i/blocksize and then
-        //let  = self.b_get()
-        //self.device.
-        unimplemented!()
+        let mut target_block = self.b_get(block_addr)?;
+        //byte that will contain the bit we want to change
+        let mut byte : [u8; 1] = Default::default();
+        target_block.read_data(&mut byte, target_byte)?;
+        byte.set_bit(target_bit as usize, false);
+
+        //write back
+        target_block.write_data(&byte, target_byte)?;
+        self.b_put(&target_block)?;
+        Ok(())
     }
 
     fn b_zero(&mut self, i: u64) -> Result<(), Self::Error> {
