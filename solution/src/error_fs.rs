@@ -13,8 +13,14 @@ pub enum BlockLayerError {
     ControllerError(#[from] APIError),
 
     /// errors regarding input on the BLockLayerFS
+    /// these errors are thrown when there is a problem while
+    /// reading something
     #[error("Error in the input of BLockLayerFS: {0}")]
-    BlockLayerInput(&'static str)
+    BlockLayerInput(&'static str),
+
+    ///errors regarding problems when writing
+    #[error("Invalid write in BLockLayerFS: {0}")]
+    BlockLayerWrite(&'static str)
 }
 
 /// Define a generic alias for a `Result` with the error type `APIError`.
