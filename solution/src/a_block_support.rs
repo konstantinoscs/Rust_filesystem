@@ -14,24 +14,21 @@
 //! or you want to explain your approach, write it down after the comments
 //! section. If you had no major issues and everything works, there is no need to write any comments.
 //!
-//! COMPLETED: ?
+//! COMPLETED: YES
 //!
 //! COMMENTS:
 //!
 //! ...
 //!
 
-// Turn off the warnings we get from the below example imports, which are currently unused.
-// TODO: this should be removed once you are done implementing this file. You can remove all of the below imports you do not need, as they are simply there to illustrate how you can import things.
-#![allow(unused_imports)]
 // We import std::error and std::format so we can say error::Error instead of
 // std::error::Error, etc.
-use std::{ error, fmt, path::Path};
+use std::{ path::Path};
 
 // If you want to import things from the API crate, do so as follows:
 use cplfs_api::fs::FileSysSupport;
 use cplfs_api::fs::BlockSupport;
-use cplfs_api::types::{Block, Inode, SuperBlock, DINODE_SIZE };
+use cplfs_api::types::{Block, SuperBlock, DINODE_SIZE };
 use cplfs_api::controller::Device;
 use bit_field::BitField;
 
@@ -41,7 +38,6 @@ use super::error_fs::BlockLayerError;
 /// automated tests when grading your assignment, indicate here the name of
 /// your file system data type so we can just use `FSName` instead of
 /// having to manually figure out your file system name.
-/// **TODO**: replace the below type by the type of your file system
 pub type FSName = BlockLayerFS;
 
 /// Struct representing the block layer
@@ -51,7 +47,15 @@ pub struct BlockLayerFS {
     super_block: SuperBlock,
 
     /// the encapsulated device
-    pub device: Device
+    device: Device
+}
+
+///Functions specific to BlockLayerFS
+impl BlockLayerFS {
+    ///Returns a reference to the Filesystem's cached superblock
+    pub fn sup_as_ref(&self) -> &SuperBlock {
+        &self.super_block
+    }
 }
 
 impl FileSysSupport for BlockLayerFS {
@@ -182,7 +186,7 @@ impl BlockSupport for BlockLayerFS {
     }
 
     fn sup_get(&self) -> Result<SuperBlock, Self::Error> {
-        return Ok(self.super_block);
+        Ok(SuperBlock::from(self.super_block))
     }
 
     fn sup_put(&mut self, sup: &SuperBlock) -> Result<(), Self::Error> {

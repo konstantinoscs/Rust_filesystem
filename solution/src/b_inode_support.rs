@@ -22,12 +22,79 @@
 //! ...
 //!
 
+use crate::a_block_support::BlockLayerFS;
+use cplfs_api::types::{SuperBlock, Block};
+use cplfs_api::fs::{BlockSupport, FileSysSupport};
+use std::path::Path;
+use cplfs_api::controller::Device;
+use crate::error_fs::InodeLayerError;
+
 /// You are free to choose the name for your file system. As we will use
 /// automated tests when grading your assignment, indicate here the name of
 /// your file system data type so we can just use `FSName` instead of
 /// having to manually figure out the name.
 /// **TODO**: replace the below type by the type of your file system
-pub type FSName = ();
+pub type FSName = InodeLayerFS;
+
+///Struct representing a file system with up to Inode layer support
+#[derive(Debug)]
+pub struct InodeLayerFS {
+    block_fs :BlockLayerFS
+}
+
+impl FileSysSupport for InodeLayerFS {
+    type Error = InodeLayerError;
+
+    fn sb_valid(sb: &SuperBlock) -> bool {
+        BlockLayerFS::sb_valid(sb)
+    }
+
+    fn mkfs<P: AsRef<Path>>(path: P, sb: &SuperBlock) -> Result<Self, Self::Error> {
+        Ok(InodeLayerFS {
+            block_fs: BlockLayerFS::mkfs(path, sb)?
+        })
+    }
+
+    fn mountfs(dev: Device) -> Result<Self, Self::Error> {
+        Ok(InodeLayerFS{
+            block_fs: BlockLayerFS::mountfs(dev)?
+        })
+    }
+
+    fn unmountfs(self) -> Device {
+        self.block_fs.unmountfs()
+    }
+}
+
+impl BlockSupport for InodeLayerFS {
+    fn b_get(&self, i: u64) -> Result<Block, Self::Error> {
+        unimplemented!()
+    }
+
+    fn b_put(&mut self, b: &Block) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    fn b_free(&mut self, i: u64) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    fn b_zero(&mut self, i: u64) -> Result<(), Self::Error> {
+       unimplemented!()
+    }
+
+    fn b_alloc(&mut self) -> Result<u64, Self::Error> {
+        unimplemented!()
+    }
+
+    fn sup_get(&self) -> Result<SuperBlock, Self::Error> {
+        unimplemented!()
+    }
+
+    fn sup_put(&mut self, sup: &SuperBlock) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+}
 
 // **TODO** define your own tests here.
 
