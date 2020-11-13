@@ -1,4 +1,3 @@
-use std::io;
 use thiserror::Error;
 use cplfs_api::error_given::APIError;
 
@@ -20,7 +19,11 @@ pub enum BlockLayerError {
 
     ///errors regarding problems when writing
     #[error("Invalid write in BLockLayerFS: {0}")]
-    BlockLayerWrite(&'static str)
+    BlockLayerWrite(&'static str),
+
+    ///errors regarding the internal state of the FS
+    #[error("Error in operation of BlockLayerFS: {0}")]
+    BlockLayerOp(&'static str)
 }
 
 /// Define a generic alias for a `Result` with the error type `APIError`.

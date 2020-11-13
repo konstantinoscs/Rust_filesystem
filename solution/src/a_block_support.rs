@@ -146,7 +146,39 @@ impl BlockSupport for BlockLayerFS {
     }
 
     fn b_alloc(&mut self) -> Result<u64, Self::Error> {
-        unimplemented!()
+        let bmap_blocks = (self.super_block.ndatablocks as f64 / 8.0).ceil() as u64;
+        let mut bit :u64 = 0;
+        let full_byte :u8 = 0b11111111;
+        let mut byte_slice : [u8; 1] = Default::default();
+        // iterate over every block to find a free bit
+        for bl in 0..bmap_blocks {
+            let mut block = self.b_get(self.super_block.bmapstart+bl)?;
+            let buf = block.contents_as_ref();
+            //iterate over every byte and count the bits until we find a "0"
+            for by in 0..block.len() {
+                if buf[by as usize] ^ full_byte != 0 {
+                    // iterate inside the byte
+                    for i in 0..8 {
+                        //the byte may have padding and go to illegal addresses so we check
+                        if bit + i == self.super_block.ndatablocks {
+                            return Err(BlockLayerError::BlockLayerOp("No space left!"));
+                        }
+                        //if zero bit is found, write the block and persist it
+                        if !buf[by as usize].get_bit(i as usize) {
+                            block.read_data(&mut byte_slice, by)?;
+                            byte_slice.first_mut().unwrap().set_bit(i as usize, true);
+                            block.write_data(&byte_slice, by)?;
+                            self.b_put(&block)?;
+                            println!("Returning Successfully {0}", bit+i as u64);
+                            return Ok(bit + i as u64);
+                        }
+                    }
+                } else {
+                    bit += 8;
+                }
+            }
+        }
+        Err(BlockLayerError::BlockLayerOp("No space left!"))
     }
 
     fn sup_get(&self) -> Result<SuperBlock, Self::Error> {
@@ -154,7 +186,7 @@ impl BlockSupport for BlockLayerFS {
     }
 
     fn sup_put(&mut self, sup: &SuperBlock) -> Result<(), Self::Error> {
-        let mut super_block = Block::new_zero(0, sup.block_size);
+        let mut super_block = self.device.read_block(0)?;
         super_block.serialize_into(sup, 0)?;
         self.device.write_block(&super_block)?;
         self.super_block = SuperBlock::from(*sup);
