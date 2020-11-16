@@ -22,12 +22,13 @@
 //! ...
 //!
 
-use crate::a_block_support::BlockLayerFS;
-use cplfs_api::types::{SuperBlock, Block};
-use cplfs_api::fs::{BlockSupport, FileSysSupport};
-use std::path::Path;
 use cplfs_api::controller::Device;
-use crate::error_fs::InodeLayerError;
+use cplfs_api::fs::{BlockSupport, FileSysSupport, InodeSupport};
+use cplfs_api::types::{Block, FType, Inode, InodeLike, SuperBlock};
+use std::path::Path;
+
+use super::a_block_support::BlockLayerFS;
+use super::error_fs::InodeLayerError;
 
 /// You are free to choose the name for your file system. As we will use
 /// automated tests when grading your assignment, indicate here the name of
@@ -39,7 +40,7 @@ pub type FSName = InodeLayerFS;
 ///Struct representing a file system with up to Inode layer support
 #[derive(Debug)]
 pub struct InodeLayerFS {
-    block_fs :BlockLayerFS
+    block_fs: BlockLayerFS,
 }
 
 impl FileSysSupport for InodeLayerFS {
@@ -51,13 +52,13 @@ impl FileSysSupport for InodeLayerFS {
 
     fn mkfs<P: AsRef<Path>>(path: P, sb: &SuperBlock) -> Result<Self, Self::Error> {
         Ok(InodeLayerFS {
-            block_fs: BlockLayerFS::mkfs(path, sb)?
+            block_fs: BlockLayerFS::mkfs(path, sb)?,
         })
     }
 
     fn mountfs(dev: Device) -> Result<Self, Self::Error> {
-        Ok(InodeLayerFS{
-            block_fs: BlockLayerFS::mountfs(dev)?
+        Ok(InodeLayerFS {
+            block_fs: BlockLayerFS::mountfs(dev)?,
         })
     }
 
@@ -80,7 +81,7 @@ impl BlockSupport for InodeLayerFS {
     }
 
     fn b_zero(&mut self, i: u64) -> Result<(), Self::Error> {
-       unimplemented!()
+        unimplemented!()
     }
 
     fn b_alloc(&mut self) -> Result<u64, Self::Error> {
@@ -92,6 +93,30 @@ impl BlockSupport for InodeLayerFS {
     }
 
     fn sup_put(&mut self, sup: &SuperBlock) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+}
+
+impl InodeSupport for InodeLayerFS {
+    type Inode = Inode;
+
+    fn i_get(&self, i: u64) -> Result<Self::Inode, Self::Error> {
+        unimplemented!()
+    }
+
+    fn i_put(&mut self, ino: &Self::Inode) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    fn i_free(&mut self, i: u64) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    fn i_alloc(&mut self, ft: FType) -> Result<u64, Self::Error> {
+        unimplemented!()
+    }
+
+    fn i_trunc(&mut self, inode: &mut Self::Inode) -> Result<(), Self::Error> {
         unimplemented!()
     }
 }

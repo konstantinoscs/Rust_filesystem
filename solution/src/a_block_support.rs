@@ -23,14 +23,14 @@
 
 // We import std::error and std::format so we can say error::Error instead of
 // std::error::Error, etc.
-use std::{ path::Path};
+use std::path::Path;
 
 // If you want to import things from the API crate, do so as follows:
-use cplfs_api::fs::FileSysSupport;
-use cplfs_api::fs::BlockSupport;
-use cplfs_api::types::{Block, SuperBlock, DINODE_SIZE };
-use cplfs_api::controller::Device;
 use bit_field::BitField;
+use cplfs_api::controller::Device;
+use cplfs_api::fs::BlockSupport;
+use cplfs_api::fs::FileSysSupport;
+use cplfs_api::types::{Block, SuperBlock, DINODE_SIZE};
 
 use super::error_fs::BlockLayerError;
 
@@ -47,7 +47,7 @@ pub struct BlockLayerFS {
     super_block: SuperBlock,
 
     /// the encapsulated device
-    device: Device
+    device: Device,
 }
 
 ///Functions specific to BlockLayerFS
@@ -62,24 +62,25 @@ impl FileSysSupport for BlockLayerFS {
     type Error = BlockLayerError;
 
     fn sb_valid(sb: &SuperBlock) -> bool {
-        let inode_blocks = ((*DINODE_SIZE *sb.ninodes) as f64/sb.block_size as f64).ceil() as u64;
-        sb.inodestart == 1 &&
-            sb.inodestart + inode_blocks -1 < sb.bmapstart &&
-            sb.bmapstart < sb.datastart &&
-            sb.datastart < sb.nblocks - sb.ndatablocks + 1
+        let inode_blocks =
+            ((*DINODE_SIZE * sb.ninodes) as f64 / sb.block_size as f64).ceil() as u64;
+        sb.inodestart == 1
+            && sb.inodestart + inode_blocks - 1 < sb.bmapstart
+            && sb.bmapstart < sb.datastart
+            && sb.datastart < sb.nblocks - sb.ndatablocks + 1
     }
 
     fn mkfs<P: AsRef<Path>>(path: P, sb: &SuperBlock) -> Result<Self, Self::Error> {
         match Self::sb_valid(sb) {
             false => Err(BlockLayerError::BlockLayerInput("SuperBlock not valid")),
-            true =>  {
+            true => {
                 let mut device = Device::new(path, sb.block_size, sb.nblocks)?;
                 let mut super_block = Block::new_zero(0, sb.block_size);
                 super_block.serialize_into(sb, 0)?;
                 device.write_block(&super_block)?;
                 Ok(BlockLayerFS {
                     super_block: SuperBlock::from(*sb),
-                    device
+                    device,
                 })
             }
         }
@@ -92,15 +93,14 @@ impl FileSysSupport for BlockLayerFS {
             false => Err(BlockLayerError::BlockLayerInput("SuperBlock not valid")),
             true => Ok(BlockLayerFS {
                 super_block,
-                device: dev
-            })
+                device: dev,
+            }),
         }
     }
 
     fn unmountfs(self) -> Device {
         self.device
     }
-    
 }
 
 impl BlockSupport for BlockLayerFS {
@@ -114,24 +114,30 @@ impl BlockSupport for BlockLayerFS {
 
     fn b_free(&mut self, i: u64) -> Result<(), Self::Error> {
         let byte_size = 8;
-        let block_addr =  self.super_block.bmapstart + i/(self.super_block.block_size*byte_size);
+        let block_addr = self.super_block.bmapstart + i / (self.super_block.block_size * byte_size);
         if block_addr >= self.super_block.datastart {
-            return Err(BlockLayerError::BlockLayerInput("Block address is outside bitmap bounds"))
+            return Err(BlockLayerError::BlockLayerInput(
+                "Block address is outside bitmap bounds",
+            ));
         }
         //how many bits inside the target block we have to look
-        let block_offset_bit = i % (self.super_block.block_size*byte_size);
+        let block_offset_bit = i % (self.super_block.block_size * byte_size);
         //offset of the byte inside the target_block
-        let target_byte = block_offset_bit/byte_size;
+        let target_byte = block_offset_bit / byte_size;
         let target_bit = block_offset_bit % byte_size;
         //get bitmap starting address, divide i/blocksize and then
         let mut target_block = self.b_get(block_addr)?;
         //byte that will contain the bit we want to change
-        let mut byte_slice : [u8; 1] = Default::default();
+        let mut byte_slice: [u8; 1] = Default::default();
         target_block.read_data(&mut byte_slice, target_byte)?;
-        let  byte = byte_slice.first_mut().unwrap();
+        let byte = byte_slice.first_mut().unwrap();
         match byte.get_bit(target_bit as usize) {
-            false => return Err(BlockLayerError::BlockLayerWrite("Trying to free a free block")),
-            true => byte.set_bit(target_bit as usize, false)
+            false => {
+                return Err(BlockLayerError::BlockLayerWrite(
+                    "Trying to free a free block",
+                ))
+            }
+            true => byte.set_bit(target_bit as usize, false),
         };
 
         //write back
@@ -141,22 +147,24 @@ impl BlockSupport for BlockLayerFS {
     }
 
     fn b_zero(&mut self, i: u64) -> Result<(), Self::Error> {
-        if i > self.super_block.ndatablocks -1 {
-            return Err(BlockLayerError::BlockLayerInput("Trying to access a block with index outside bounds"));
+        if i > self.super_block.ndatablocks - 1 {
+            return Err(BlockLayerError::BlockLayerInput(
+                "Trying to access a block with index outside bounds",
+            ));
         }
-        let block_len = self.b_get(self.super_block.datastart+i)?.len();
-        let zero_block = Block::new_zero(self.super_block.datastart+i, block_len);
+        let block_len = self.b_get(self.super_block.datastart + i)?.len();
+        let zero_block = Block::new_zero(self.super_block.datastart + i, block_len);
         self.b_put(&zero_block)
     }
 
     fn b_alloc(&mut self) -> Result<u64, Self::Error> {
         let bmap_blocks = (self.super_block.ndatablocks as f64 / 8.0).ceil() as u64;
-        let mut bit :u64 = 0;
-        let full_byte :u8 = 0b11111111;
-        let mut byte_slice : [u8; 1] = Default::default();
+        let mut bit: u64 = 0;
+        let full_byte: u8 = 0b11111111;
+        let mut byte_slice: [u8; 1] = Default::default();
         // iterate over every block to find a free bit
         for bl in 0..bmap_blocks {
-            let mut block = self.b_get(self.super_block.bmapstart+bl)?;
+            let mut block = self.b_get(self.super_block.bmapstart + bl)?;
             let buf = block.contents_as_ref();
             //iterate over every byte and count the bits until we find a "0"
             for by in 0..block.len() {
@@ -173,7 +181,6 @@ impl BlockSupport for BlockLayerFS {
                             byte_slice.first_mut().unwrap().set_bit(i as usize, true);
                             block.write_data(&byte_slice, by)?;
                             self.b_put(&block)?;
-                            println!("Returning Successfully {0}", bit+i as u64);
                             return Ok(bit + i as u64);
                         }
                     }

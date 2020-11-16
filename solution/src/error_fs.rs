@@ -1,5 +1,5 @@
-use thiserror::Error;
 use cplfs_api::error_given::APIError;
+use thiserror::Error;
 
 ///Error type used in the BlockLayer
 #[derive(Error, Debug)]
@@ -19,7 +19,7 @@ pub enum BlockLayerError {
 
     ///errors regarding the internal state of the FS
     #[error("Error in operation of BlockLayerFS: {0}")]
-    BlockLayerOp(&'static str)
+    BlockLayerOp(&'static str),
 }
 
 ///Error type used in the InodeLayer

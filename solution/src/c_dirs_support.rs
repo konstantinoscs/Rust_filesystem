@@ -23,11 +23,12 @@
 //! ...
 //!
 
-use cplfs_api::fs::{BlockSupport, FileSysSupport};
-use cplfs_api::types::{SuperBlock, Block};
-use std::path::Path;
 use cplfs_api::controller::Device;
-use crate::error_fs::DirLayerError;
+use cplfs_api::fs::{BlockSupport, FileSysSupport, InodeSupport};
+use cplfs_api::types::{Block, FType, Inode, SuperBlock};
+use std::path::Path;
+
+use super::error_fs::DirLayerError;
 
 /// You are free to choose the name for your file system. As we will use
 /// automated tests when grading your assignment, indicate here the name of
@@ -38,9 +39,7 @@ pub type FSName = ();
 
 ///Struct representing a file system with up to Directory layer support
 #[derive(Debug)]
-pub enum DirLayerFS {
-
-}
+pub enum DirLayerFS {}
 
 impl FileSysSupport for DirLayerFS {
     type Error = DirLayerError;
@@ -76,7 +75,7 @@ impl BlockSupport for DirLayerFS {
     }
 
     fn b_zero(&mut self, i: u64) -> Result<(), Self::Error> {
-       unimplemented!()
+        unimplemented!()
     }
 
     fn b_alloc(&mut self) -> Result<u64, Self::Error> {
@@ -88,6 +87,30 @@ impl BlockSupport for DirLayerFS {
     }
 
     fn sup_put(&mut self, sup: &SuperBlock) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+}
+
+impl InodeSupport for DirLayerFS {
+    type Inode = Inode;
+
+    fn i_get(&self, i: u64) -> Result<Self::Inode, Self::Error> {
+        unimplemented!()
+    }
+
+    fn i_put(&mut self, ino: &Self::Inode) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    fn i_free(&mut self, i: u64) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    fn i_alloc(&mut self, ft: FType) -> Result<u64, Self::Error> {
+        unimplemented!()
+    }
+
+    fn i_trunc(&mut self, inode: &mut Self::Inode) -> Result<(), Self::Error> {
         unimplemented!()
     }
 }
