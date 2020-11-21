@@ -50,9 +50,9 @@ pub struct BlockLayerFS {
     device: Device,
 }
 
-///Functions specific to BlockLayerFS
+/// Functions specific to BlockLayerFS
 impl BlockLayerFS {
-    ///Returns a reference to the Filesystem's cached superblock
+    /// Returns a reference to the Filesystem's cached superblock
     pub fn sup_as_ref(&self) -> &SuperBlock {
         &self.super_block
     }
@@ -63,11 +63,13 @@ impl FileSysSupport for BlockLayerFS {
 
     fn sb_valid(sb: &SuperBlock) -> bool {
         let inode_blocks =
-            ((*DINODE_SIZE * sb.ninodes) as f64 / sb.block_size as f64).ceil() as u64;
+            (sb.ninodes as f64 / (sb.block_size / *DINODE_SIZE) as f64).ceil() as u64;
+        // ((*DINODE_SIZE * sb.ninodes) as f64 / sb.block_size as f64).ceil() as u64;
+        let bmap_blocks = (sb.ndatablocks as f64 / (sb.block_size * 8) as f64).ceil() as u64;
         sb.inodestart == 1
             && sb.inodestart + inode_blocks - 1 < sb.bmapstart
-            && sb.bmapstart < sb.datastart
-            && sb.datastart < sb.nblocks - sb.ndatablocks + 1
+            && sb.bmapstart + bmap_blocks - 1 < sb.datastart
+            && sb.datastart + sb.ndatablocks - 1 < sb.nblocks
     }
 
     fn mkfs<P: AsRef<Path>>(path: P, sb: &SuperBlock) -> Result<Self, Self::Error> {
@@ -114,8 +116,9 @@ impl BlockSupport for BlockLayerFS {
 
     fn b_free(&mut self, i: u64) -> Result<(), Self::Error> {
         let byte_size = 8;
-        let block_addr = self.super_block.bmapstart + i / (self.super_block.block_size * byte_size);
-        if block_addr >= self.super_block.datastart {
+        let t_block_addr =
+            self.super_block.bmapstart + i / (self.super_block.block_size * byte_size);
+        if t_block_addr >= self.super_block.datastart {
             return Err(BlockLayerError::BlockLayerInput(
                 "Block address is outside bitmap bounds",
             ));
@@ -126,7 +129,7 @@ impl BlockSupport for BlockLayerFS {
         let target_byte = block_offset_bit / byte_size;
         let target_bit = block_offset_bit % byte_size;
         //get bitmap starting address, divide i/blocksize and then
-        let mut target_block = self.b_get(block_addr)?;
+        let mut target_block = self.b_get(t_block_addr)?;
         //byte that will contain the bit we want to change
         let mut byte_slice: [u8; 1] = Default::default();
         target_block.read_data(&mut byte_slice, target_byte)?;
@@ -185,6 +188,7 @@ impl BlockSupport for BlockLayerFS {
                         }
                     }
                 } else {
+                    //no free spot was found, iterate one byte
                     bit += 8;
                 }
             }

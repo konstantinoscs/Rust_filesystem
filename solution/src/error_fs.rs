@@ -25,9 +25,17 @@ pub enum BlockLayerError {
 ///Error type used in the InodeLayer
 #[derive(Error, Debug)]
 pub enum InodeLayerError {
+    ///errors from the controller layer
+    #[error("Error in the controller layer")]
+    ControllerError(#[from] APIError),
+
     ///errors from the block layer
     #[error("Error in the block layer")]
-    ControllerError(#[from] BlockLayerError),
+    BlockLayerError(#[from] BlockLayerError),
+
+    /// errors regarding input on the InodeLayerFS
+    #[error("Error in the input of InodeLayerFS: {0}")]
+    InodeLayerInput(&'static str),
 }
 
 ///Error type used in the DirLayer
