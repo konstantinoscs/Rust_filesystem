@@ -36,6 +36,10 @@ pub enum InodeLayerError {
     /// errors regarding input on the InodeLayerFS
     #[error("Error in the input of InodeLayerFS: {0}")]
     InodeLayerInput(&'static str),
+
+    ///errors regarding the internal state of the FS
+    #[error("Error in operation of InodeLayerFS: {0}")]
+    InodeLayerOp(&'static str),
 }
 
 ///Error type used in the DirLayer

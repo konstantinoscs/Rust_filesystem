@@ -163,7 +163,6 @@ impl BlockSupport for BlockLayerFS {
     fn b_alloc(&mut self) -> Result<u64, Self::Error> {
         let bmap_blocks = (self.super_block.ndatablocks as f64 / 8.0).ceil() as u64;
         let mut bit: u64 = 0;
-        let full_byte: u8 = 0b11111111;
         let mut byte_slice: [u8; 1] = Default::default();
         // iterate over every block to find a free bit
         for bl in 0..bmap_blocks {
@@ -171,7 +170,7 @@ impl BlockSupport for BlockLayerFS {
             let buf = block.contents_as_ref();
             //iterate over every byte and count the bits until we find a "0"
             for by in 0..block.len() {
-                if buf[by as usize] ^ full_byte != 0 {
+                if buf[by as usize] != 0b1111_1111 {
                     // iterate inside the byte
                     for i in 0..8 {
                         //the byte may have padding and go to illegal addresses so we check

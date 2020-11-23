@@ -49,6 +49,17 @@ impl InodeLayerFS {
     pub fn sup_as_ref(&self) -> &SuperBlock {
         self.block_fs.sup_as_ref()
     }
+
+    ///returns the block that contains inode with index i
+    fn get_block_of_inode(&self, i: u64) -> Result<Block, InodeLayerError> {
+        if i > self.sup_as_ref().ninodes - 1 {
+            return Err(InodeLayerError::InodeLayerInput(
+                "Trying to get inode with index out of bounds",
+            ));
+        }
+        let t_block_addr = self.sup_as_ref().inodestart + i / self.inodes_per_block;
+        self.b_get(t_block_addr)
+    }
 }
 
 impl FileSysSupport for InodeLayerFS {
@@ -65,7 +76,6 @@ impl FileSysSupport for InodeLayerFS {
         let inode_blocks = (sb.ninodes as f64 / inodes_per_block as f64).ceil() as u64;
         let mut nodes_init = 0;
         let default_dinode = DInode::default();
-        assert_eq!(default_dinode.ft, FType::TFree);
         //init every inode as TFree
         for bl in 0..inode_blocks {
             let mut block = block_fs.b_get(sb.inodestart + bl)?;
@@ -134,20 +144,9 @@ impl InodeSupport for InodeLayerFS {
     type Inode = Inode;
 
     fn i_get(&self, i: u64) -> Result<Self::Inode, Self::Error> {
-        if i > self.sup_as_ref().ninodes - 1 {
-            return Err(InodeLayerError::InodeLayerInput(
-                "Trying to get inode with index out of bounds",
-            ));
-        }
-        let t_block_addr = self.sup_as_ref().inodestart + i / self.inodes_per_block;
         let t_offset = (i % self.inodes_per_block) * (*DINODE_SIZE);
-        println!(
-            "Getting i {}, translating it to t_block_addr {} and offset {}",
-            i, t_block_addr, t_offset
-        );
-        let mut target_block = self.block_fs.b_get(t_block_addr)?;
+        let target_block = self.get_block_of_inode(i)?;
         let di_node = target_block.deserialize_from::<DInode>(t_offset)?;
-        target_block.serialize_into(&di_node, t_offset)?;
         Ok(Inode {
             inum: i,
             disk_node: di_node,
@@ -155,24 +154,65 @@ impl InodeSupport for InodeLayerFS {
     }
 
     fn i_put(&mut self, ino: &Self::Inode) -> Result<(), Self::Error> {
-        let t_block_addr = self.sup_as_ref().inodestart + ino.inum / self.inodes_per_block;
         let t_offset = (ino.inum % self.inodes_per_block) * (*DINODE_SIZE);
-        println!(
-            "Putting i {}, translating it to t_block_addr {} and offset {}",
-            ino.inum, t_block_addr, t_offset
-        );
-        let mut target_block = self.b_get(t_block_addr)?;
+        let mut target_block = self.get_block_of_inode(ino.inum)?;
         target_block.serialize_into(&ino.disk_node, t_offset)?;
         self.b_put(&target_block)?;
         Ok(())
     }
 
     fn i_free(&mut self, i: u64) -> Result<(), Self::Error> {
-        unimplemented!()
+        let mut inode = self.i_get(i)?;
+        if inode.disk_node.ft == FType::TFree {
+            return Err(InodeLayerError::InodeLayerOp(
+                "Trying to free a TFree inode",
+            ));
+        }
+        if inode.disk_node.nlink != 0 {
+            return Ok(());
+        }
+        inode.disk_node.ft = FType::TFree;
+        let blocks_occupied =
+            (inode.disk_node.size as f64 / self.sup_as_ref().block_size as f64).ceil() as u64;
+        for i in 0..blocks_occupied {
+            //calculate the relative address to datastart as required by b_free
+            let target_block =
+                inode.disk_node.direct_blocks[i as usize] - self.sup_as_ref().datastart;
+            self.block_fs.b_free(target_block)?;
+            inode.disk_node.direct_blocks[i as usize] = 0;
+        }
+        self.i_put(&inode)
     }
 
     fn i_alloc(&mut self, ft: FType) -> Result<u64, Self::Error> {
-        unimplemented!()
+        let inode_blocks =
+            (self.sup_as_ref().ninodes as f64 / self.inodes_per_block as f64).ceil() as u64;
+        let mut nodes_searched = 1;
+        for bl in 0..inode_blocks {
+            let mut block = self.block_fs.b_get(self.sup_as_ref().inodestart + bl)?;
+            for node in 0..self.inodes_per_block {
+                if bl == 0 && node == 0 {
+                    //skip root inode
+                    continue;
+                }
+                if nodes_searched == self.sup_as_ref().ninodes {
+                    break;
+                }
+                let mut di_node = block.deserialize_from::<DInode>(node * (*DINODE_SIZE))?;
+                if di_node.ft == FType::TFree {
+                    di_node.ft = ft;
+                    di_node.size = 0;
+                    di_node.nlink = 0;
+                    block.serialize_into(&di_node, node * (*DINODE_SIZE))?;
+                    self.block_fs.b_put(&block)?;
+                    return Ok(nodes_searched);
+                }
+                nodes_searched += 1;
+            }
+        }
+        Err(InodeLayerError::InodeLayerOp(
+            "Cannot allocate new block, no space left!",
+        ))
     }
 
     fn i_trunc(&mut self, inode: &mut Self::Inode) -> Result<(), Self::Error> {
