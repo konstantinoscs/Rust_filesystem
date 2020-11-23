@@ -15,7 +15,7 @@
 //! or you want to explain your approach, write it down after the comments
 //! section. If you had no major issues and everything works, there is no need to write any comments.
 //!
-//! COMPLETED: ?
+//! COMPLETED: Yes
 //!
 //! COMMENTS:
 //!
@@ -51,7 +51,7 @@ impl InodeLayerFS {
     }
 
     ///returns the block that contains inode with index i
-    fn get_block_of_inode(&self, i: u64) -> Result<Block, InodeLayerError> {
+    fn get_block_of_inode(&self, i: u64) -> Result<Block, <Self as FileSysSupport>::Error> {
         if i > self.sup_as_ref().ninodes - 1 {
             return Err(InodeLayerError::InodeLayerInput(
                 "Trying to get inode with index out of bounds",
@@ -59,6 +59,23 @@ impl InodeLayerFS {
         }
         let t_block_addr = self.sup_as_ref().inodestart + i / self.inodes_per_block;
         self.b_get(t_block_addr)
+    }
+
+    fn free_inode_blocks(
+        &mut self,
+        inode: &mut <Self as InodeSupport>::Inode,
+    ) -> Result<(), <Self as FileSysSupport>::Error> {
+        let blocks_occupied =
+            (inode.disk_node.size as f64 / self.sup_as_ref().block_size as f64).ceil() as u64;
+        for i in 0..blocks_occupied {
+            //calculate the relative address to datastart as required by b_free
+            let target_block =
+                inode.disk_node.direct_blocks[i as usize] - self.sup_as_ref().datastart;
+            self.block_fs.b_free(target_block)?;
+            inode.disk_node.direct_blocks[i as usize] = 0;
+        }
+        inode.disk_node.size = 0;
+        Ok(())
     }
 }
 
@@ -172,15 +189,7 @@ impl InodeSupport for InodeLayerFS {
             return Ok(());
         }
         inode.disk_node.ft = FType::TFree;
-        let blocks_occupied =
-            (inode.disk_node.size as f64 / self.sup_as_ref().block_size as f64).ceil() as u64;
-        for i in 0..blocks_occupied {
-            //calculate the relative address to datastart as required by b_free
-            let target_block =
-                inode.disk_node.direct_blocks[i as usize] - self.sup_as_ref().datastart;
-            self.block_fs.b_free(target_block)?;
-            inode.disk_node.direct_blocks[i as usize] = 0;
-        }
+        self.free_inode_blocks(&mut inode)?;
         self.i_put(&inode)
     }
 
@@ -216,11 +225,10 @@ impl InodeSupport for InodeLayerFS {
     }
 
     fn i_trunc(&mut self, inode: &mut Self::Inode) -> Result<(), Self::Error> {
-        unimplemented!()
+        self.free_inode_blocks(inode)?;
+        self.i_put(inode)
     }
 }
-
-// **TODO** define your own tests here.
 
 // WARNING: DO NOT TOUCH THE BELOW CODE -- IT IS REQUIRED FOR TESTING -- YOU WILL LOSE POINTS IF I MANUALLY HAVE TO FIX YOUR TESTS
 #[cfg(all(test, any(feature = "b", feature = "all")))]
