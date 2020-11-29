@@ -256,10 +256,14 @@ fn mkdir() {
         *DIRENTRY_SIZE
     );
     assert_eq!(
+        my_fs.dirlink(&mut my_fs.i_get(5).unwrap(), ".", 5).unwrap(),
+        0
+    );
+    assert_eq!(
         my_fs
             .dirlink(&mut my_fs.i_get(5).unwrap(), "..", 3)
             .unwrap(),
-        0
+        *DIRENTRY_SIZE
     );
 
     //nlink is 1, from 3

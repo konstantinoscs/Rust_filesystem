@@ -24,93 +24,143 @@
 //!
 
 use cplfs_api::controller::Device;
-use cplfs_api::fs::{BlockSupport, FileSysSupport, InodeSupport};
-use cplfs_api::types::{Block, FType, Inode, SuperBlock};
+use cplfs_api::fs::{BlockSupport, FileSysSupport, InodeSupport, DirectorySupport};
+use cplfs_api::types::{Block, FType, Inode, SuperBlock, DirEntry, DIRNAME_SIZE};
 use std::path::Path;
 
 use super::error_fs::DirLayerError;
+use crate::b_inode_support::InodeLayerFS;
 
 /// You are free to choose the name for your file system. As we will use
 /// automated tests when grading your assignment, indicate here the name of
 /// your file system data type so we can just use `FSName` instead of
 /// having to manually figure out the name.
 /// **TODO**: replace the below type by the type of your file system
-pub type FSName = ();
+pub type FSName = DirLayerFS;
 
 ///Struct representing a file system with up to Directory layer support
 #[derive(Debug)]
-pub enum DirLayerFS {}
+pub struct DirLayerFS {
+    inode_fs: InodeLayerFS,
+
+}
+
+impl DirLayerFS {
+    fn sup_as_ref(&self) -> &SuperBlock {
+        return self.inode_fs.sup_as_ref();
+    }
+}
+
 
 impl FileSysSupport for DirLayerFS {
     type Error = DirLayerError;
 
     fn sb_valid(sb: &SuperBlock) -> bool {
-        unimplemented!()
+        InodeLayerFS::sb_valid(sb)
     }
 
     fn mkfs<P: AsRef<Path>>(path: P, sb: &SuperBlock) -> Result<Self, Self::Error> {
-        unimplemented!()
+        let inode_fs = InodeLayerFS::mkfs(path, sb)?;
+        Ok(DirLayerFS {
+            inode_fs
+        })
     }
 
     fn mountfs(dev: Device) -> Result<Self, Self::Error> {
-        unimplemented!()
+        Ok(DirLayerFS {
+            inode_fs: InodeLayerFS::mountfs(dev)?
+        })
     }
 
     fn unmountfs(self) -> Device {
-        unimplemented!()
+        self.inode_fs.unmountfs()
     }
 }
 
 impl BlockSupport for DirLayerFS {
     fn b_get(&self, i: u64) -> Result<Block, Self::Error> {
-        unimplemented!()
+        Ok(self.inode_fs.b_get(i)?)
     }
 
     fn b_put(&mut self, b: &Block) -> Result<(), Self::Error> {
-        unimplemented!()
+        Ok(self.inode_fs.b_put(b)?)
     }
 
     fn b_free(&mut self, i: u64) -> Result<(), Self::Error> {
-        unimplemented!()
+        Ok(self.inode_fs.b_free(i)?)
     }
 
     fn b_zero(&mut self, i: u64) -> Result<(), Self::Error> {
-        unimplemented!()
+        Ok(self.inode_fs.b_zero(i)?)
     }
 
     fn b_alloc(&mut self) -> Result<u64, Self::Error> {
-        unimplemented!()
+        Ok(self.inode_fs.b_alloc()?)
     }
 
     fn sup_get(&self) -> Result<SuperBlock, Self::Error> {
-        unimplemented!()
+        Ok(self.inode_fs.sup_get()?)
     }
 
     fn sup_put(&mut self, sup: &SuperBlock) -> Result<(), Self::Error> {
-        unimplemented!()
-    }
-}
+        Ok(self.inode_fs.sup_put(sup)?)
+    }}
 
 impl InodeSupport for DirLayerFS {
     type Inode = Inode;
 
     fn i_get(&self, i: u64) -> Result<Self::Inode, Self::Error> {
-        unimplemented!()
+        Ok(self.inode_fs.i_get(i)?)
     }
 
     fn i_put(&mut self, ino: &Self::Inode) -> Result<(), Self::Error> {
-        unimplemented!()
+        Ok(self.inode_fs.i_put(ino)?)
     }
 
     fn i_free(&mut self, i: u64) -> Result<(), Self::Error> {
-        unimplemented!()
+        Ok(self.inode_fs.i_free(i)?)
     }
 
     fn i_alloc(&mut self, ft: FType) -> Result<u64, Self::Error> {
-        unimplemented!()
+        Ok(self.inode_fs.i_alloc(ft)?)
     }
 
     fn i_trunc(&mut self, inode: &mut Self::Inode) -> Result<(), Self::Error> {
+        Ok(self.inode_fs.i_trunc(inode)?)
+    }
+}
+
+impl DirectorySupport for DirLayerFS {
+    fn new_de(inum: u64, name: &str) -> Option<DirEntry> {
+        unimplemented!()
+    }
+
+    fn get_name_str(de: &DirEntry) -> String {
+        let mut name :String = "".to_string();
+        for ch in de.name.iter() {
+            if *ch == '\0' {
+                break;
+            }
+            name.push(*ch);
+        }
+        name
+    }
+
+    fn set_name_str(de: &mut DirEntry, name: &str) -> Option<()> {
+        for (i,c) in name.chars().enumerate() {
+            if i == DIRNAME_SIZE {
+                break;
+            }
+            de.name[i] = c;
+        }
+        Option::None
+    }
+
+    fn dirlookup(&self, inode: &Self::Inode, name: &str) -> Result<(Self::Inode, u64), Self::Error> {
+        unimplemented!()
+    }
+
+    fn dirlink(&mut self, inode: &mut Self::Inode, name: &str, inum: u64) -> Result<u64, Self::Error> {
         unimplemented!()
     }
 }

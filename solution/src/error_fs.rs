@@ -47,7 +47,7 @@ pub enum InodeLayerError {
 pub enum DirLayerError {
     ///errors from the block layer
     #[error("Error in the Inode layer")]
-    ControllerError(#[from] InodeLayerError),
+    InodeLayerError(#[from] InodeLayerError),
 }
 
 /*/// Define a generic alias for a `Result` with the error type `APIError`.
