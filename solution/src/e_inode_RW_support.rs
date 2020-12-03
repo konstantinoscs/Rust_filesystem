@@ -11,27 +11,25 @@
 //!
 //! # Status
 //!
-//! **TODO**: Replace the question mark below with YES, NO, or PARTIAL to
 //! indicate the status of this assignment. If you want to tell something
 //! about this assignment to the grader, e.g., you have a bug you can't fix,
 //! or you want to explain your approach, write it down after the comments
 //! section. If you had no major issues and everything works, there is no need to write any comments.
 //!
-//! COMPLETED: ?
+//! COMPLETED: YES
 //!
-//! COMMENTS:
+//! COMMENTS: The InodeRWSupport trait is implemented at b_inode_support.rs
 //!
 //! ...
 //!
+
+use super::b_inode_support::InodeLayerFS;
 
 /// You are free to choose the name for your file system. As we will use
 /// automated tests when grading your assignment, indicate here the name of
 /// your file system data type so we can just use `FSName` instead of
 /// having to manually figure out the name.
-/// **TODO**: replace the below type by the type of your file system
-pub type FSName = ();
-
-// **TODO** define your own tests here.
+pub type FSName = InodeLayerFS;
 
 // WARNING: DO NOT TOUCH THE BELOW CODE -- IT IS REQUIRED FOR TESTING -- YOU WILL LOSE POINTS IF I MANUALLY HAVE TO FIX YOUR TESTS
 #[cfg(all(test, any(feature = "e", feature = "all")))]

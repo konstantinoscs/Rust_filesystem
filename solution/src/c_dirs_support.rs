@@ -132,7 +132,16 @@ impl InodeSupport for DirLayerFS {
 
 impl DirectorySupport for DirLayerFS {
     fn new_de(inum: u64, name: &str) -> Option<DirEntry> {
-        unimplemented!()
+        if name.len() == 0 {
+            return Option::None
+        }
+        //let name_arr: [char; DIRNAME_SIZE] = Default::default();
+        let mut dir_entry = DirEntry {
+            inum,
+            name: Default::default()
+        };
+        Self::set_name_str(&mut dir_entry, name)?;
+        Option::Some(dir_entry)
     }
 
     fn get_name_str(de: &DirEntry) -> String {

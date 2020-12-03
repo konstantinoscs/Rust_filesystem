@@ -40,12 +40,20 @@ pub enum InodeLayerError {
     ///errors regarding the internal state of the FS
     #[error("Error in operation of InodeLayerFS: {0}")]
     InodeLayerOp(&'static str),
+
+    ///errors regarding reading operations of the FS
+    #[error("Error while reading in InodeLayerFS: {0}")]
+    InodeLayerRead(&'static str),
+
+    ///errors regarding writing operations of the FS
+    #[error("Error while writing in InodeLayerFS: {0}")]
+    InodeLayerWrite(&'static str)
 }
 
 ///Error type used in the DirLayer
 #[derive(Error, Debug)]
 pub enum DirLayerError {
-    ///errors from the block layer
+    ///errors from the Inode layer
     #[error("Error in the Inode layer")]
     InodeLayerError(#[from] InodeLayerError),
 }
