@@ -56,6 +56,14 @@ pub enum DirLayerError {
     ///errors from the Inode layer
     #[error("Error in the Inode layer")]
     InodeLayerError(#[from] InodeLayerError),
+
+    /// errors regarding input on the InodeLayerFS
+    #[error("Error in the input of InodeLayerFS: {0}")]
+    DirLayerInput(&'static str),
+
+    ///errors regarding the internal state of the FS
+    #[error("Error in operation of DirLayerFS: {0}")]
+    DirLayerOp(&'static str),
 }
 
 /*/// Define a generic alias for a `Result` with the error type `APIError`.

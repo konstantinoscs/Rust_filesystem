@@ -25,11 +25,12 @@
 
 use cplfs_api::controller::Device;
 use cplfs_api::fs::{BlockSupport, FileSysSupport, InodeSupport, DirectorySupport};
-use cplfs_api::types::{Block, FType, Inode, SuperBlock, DirEntry, DIRNAME_SIZE};
+use cplfs_api::types::{Block, FType, Inode, SuperBlock, DirEntry, DIRNAME_SIZE, DInode, InodeLike};
 use std::path::Path;
 
 use super::error_fs::DirLayerError;
 use crate::b_inode_support::InodeLayerFS;
+use std::cmp::min;
 
 /// You are free to choose the name for your file system. As we will use
 /// automated tests when grading your assignment, indicate here the name of
@@ -60,7 +61,15 @@ impl FileSysSupport for DirLayerFS {
     }
 
     fn mkfs<P: AsRef<Path>>(path: P, sb: &SuperBlock) -> Result<Self, Self::Error> {
-        let inode_fs = InodeLayerFS::mkfs(path, sb)?;
+        let mut inode_fs = InodeLayerFS::mkfs(path, sb)?;
+        let root = <<Self as InodeSupport>::Inode as InodeLike>::new(
+            1,
+            &FType::TDir,
+            1,
+            0,
+            &[]
+        ).ok_or(DirLayerError::DirLayerOp("Couldn't initialize the filesystem"))?;
+        inode_fs.i_put(&root);
         Ok(DirLayerFS {
             inode_fs
         })
@@ -135,12 +144,11 @@ impl DirectorySupport for DirLayerFS {
         if name.len() == 0 {
             return Option::None
         }
-        //let name_arr: [char; DIRNAME_SIZE] = Default::default();
         let mut dir_entry = DirEntry {
             inum,
             name: Default::default()
         };
-        Self::set_name_str(&mut dir_entry, name)?;
+        Self::set_name_str(&mut dir_entry, name);
         Option::Some(dir_entry)
     }
 
@@ -156,16 +164,22 @@ impl DirectorySupport for DirLayerFS {
     }
 
     fn set_name_str(de: &mut DirEntry, name: &str) -> Option<()> {
+        if name.len() == 0 || name.len() > DIRNAME_SIZE || !name.chars().all(char::is_alphanumeric) {
+            return Option::None;
+        }
         for (i,c) in name.chars().enumerate() {
-            if i == DIRNAME_SIZE {
-                break;
-            }
             de.name[i] = c;
         }
-        Option::None
+        if name.len() < DIRNAME_SIZE -1 {
+            de.name[name.len()+1] = '\0';
+        }
+        Option::Some(())
     }
 
     fn dirlookup(&self, inode: &Self::Inode, name: &str) -> Result<(Self::Inode, u64), Self::Error> {
+        if inode.get_ft() != FType::TDir {
+            return Err(DirLayerError::DirLayerInput("The given inode does not represent a Directory"));
+        }
         unimplemented!()
     }
 
