@@ -107,7 +107,7 @@ impl FileSysSupport for InodeLayerFS {
             }
             block_fs.b_put(&block)?;
         }
-        let inode_max_size = DIRECT_POINTERS * (*DINODE_SIZE);
+        let inode_max_size = DIRECT_POINTERS * sb.block_size;
 
         Ok(InodeLayerFS {
             block_fs,
@@ -281,7 +281,7 @@ impl InodeRWSupport for InodeLayerFS {
         let s_block_index = (off / self.sup_as_ref().block_size) as usize;
         let mut block_off = (off % self.sup_as_ref().block_size) as usize;
         let mut bytes_left = n as usize;
-        //no of blocks that the read spans
+        //no of blocks that the write spans
         let no_blocks = ( (n as usize + block_off) as f64 / self.sup_as_ref().block_size as f64).ceil() as usize;
         let mut dirty_i = false;
 

@@ -24,8 +24,8 @@
 //!
 
 use cplfs_api::controller::Device;
-use cplfs_api::fs::{BlockSupport, FileSysSupport, InodeSupport, DirectorySupport};
-use cplfs_api::types::{Block, FType, Inode, SuperBlock, DirEntry, DIRNAME_SIZE, DInode, InodeLike};
+use cplfs_api::fs::{BlockSupport, FileSysSupport, InodeSupport, DirectorySupport, InodeRWSupport};
+use cplfs_api::types::{Block, FType, Inode, SuperBlock, DirEntry, DIRENTRY_SIZE, DIRNAME_SIZE, DInode, InodeLike, Buffer};
 use std::path::Path;
 
 use super::error_fs::DirLayerError;
@@ -50,6 +50,25 @@ impl DirLayerFS {
     fn sup_as_ref(&self) -> &SuperBlock {
         return self.inode_fs.sup_as_ref();
     }
+
+    fn eq_str_char_arr(&self, string: &str, arr: &[char]) -> bool {
+        let arrlen = arr.iter().filter(|&c| *c != '\0').count();
+        if string.len() != arrlen {
+            return false;
+        }
+        for (i, c) in string.chars().enumerate() {
+            if arr[i] != c {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn get_dir_entry(&self, inode: &<Self as InodeSupport>::Inode, idx: u64) -> Result<DirEntry, <Self as FileSysSupport>::Error> {
+        let mut buf = Buffer::new_zero(*DIRENTRY_SIZE);
+        self.inode_fs.i_read(inode, &mut buf, idx*(*DIRENTRY_SIZE),*DIRENTRY_SIZE)?;
+        Ok(buf.deserialize_from::<DirEntry>(0)?)
+    }
 }
 
 
@@ -69,7 +88,7 @@ impl FileSysSupport for DirLayerFS {
             0,
             &[]
         ).ok_or(DirLayerError::DirLayerOp("Couldn't initialize the filesystem"))?;
-        inode_fs.i_put(&root);
+        inode_fs.i_put(&root)?;
         Ok(DirLayerFS {
             inode_fs
         })
@@ -180,11 +199,56 @@ impl DirectorySupport for DirLayerFS {
         if inode.get_ft() != FType::TDir {
             return Err(DirLayerError::DirLayerInput("The given inode does not represent a Directory"));
         }
-        unimplemented!()
+        // start grabbing DirEntries and seeing if they are the one we are looking for
+        let no_entries = inode.get_size() / (*DIRENTRY_SIZE);
+        //let mut buf = Buffer::new_zero(*DIRENTRY_SIZE);
+        for i in 0..no_entries {
+            //self.inode_fs.i_read(inode, &mut buf, i*(*DIRENTRY_SIZE),*DIRENTRY_SIZE)?;
+            let entry = self.get_dir_entry(inode, i)?;
+            if self.eq_str_char_arr(name, &entry.name) {
+                return Ok((self.i_get(entry.inum)?, i*(*DIRENTRY_SIZE)));
+            }
+        }
+        Err(DirLayerError::DirLookupNotFound())
     }
 
     fn dirlink(&mut self, inode: &mut Self::Inode, name: &str, inum: u64) -> Result<u64, Self::Error> {
-        unimplemented!()
+        // First check if inode is a dir, doesn't contain an entry with 'name'
+        // and the inode with 'inum' is already allocated
+        if inode.get_ft() != FType::TDir {
+            return Err(DirLayerError::DirLayerInput("The given inode does not correspond to a directory"));
+        }
+        if self.dirlookup(inode, name).is_ok() {
+            return Err(DirLayerError::DirLayerInput("The given node contains a dir entry with the same name"));
+        }
+        let mut queried_inode =  self.i_get(inum)?;
+        if queried_inode.get_ft() == FType::TFree {
+            return Err(DirLayerError::DirLayerInput("The given inum points to a free inode"));
+        }
+
+        let entry = Self::new_de(inum, name)
+            .ok_or(DirLayerError::DirLayerOp("Could not initialize new dirEntry"))?;
+        let mut t_offest = inode.get_size();
+
+        // try to see if there is some free DirEntry
+        let no_entries = inode.get_size() / (*DIRENTRY_SIZE);
+        for i in 0..no_entries {
+            if self.get_dir_entry(inode, i)?.inum == 0 {
+                t_offest = i*(*DIRENTRY_SIZE);
+                break;
+            }
+        }
+
+        let mut buf = Buffer::new_zero(*DIRENTRY_SIZE);
+        buf.serialize_into(&entry, 0)?;
+        println!("Inode before write: {:?}", inode);
+        self.inode_fs.i_write(inode, &buf, t_offest, *DIRENTRY_SIZE)?;
+        println!("Inode after write: {:?}", inode);
+        if inum != inode.get_inum() {
+            queried_inode.disk_node.nlink += 1;
+            self.i_put(&queried_inode)?;
+        }
+        Ok(t_offest)
     }
 }
 

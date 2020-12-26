@@ -53,6 +53,10 @@ pub enum InodeLayerError {
 ///Error type used in the DirLayer
 #[derive(Error, Debug)]
 pub enum DirLayerError {
+    ///errors from the controller layer
+    #[error("Error in the controller layer")]
+    ControllerError(#[from] APIError),
+
     ///errors from the Inode layer
     #[error("Error in the Inode layer")]
     InodeLayerError(#[from] InodeLayerError),
@@ -64,6 +68,10 @@ pub enum DirLayerError {
     ///errors regarding the internal state of the FS
     #[error("Error in operation of DirLayerFS: {0}")]
     DirLayerOp(&'static str),
+
+    ///errors regarding the internal state of the FS
+    #[error("Directory entry not found")]
+    DirLookupNotFound(),
 }
 
 /*/// Define a generic alias for a `Result` with the error type `APIError`.
