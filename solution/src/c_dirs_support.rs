@@ -16,7 +16,7 @@
 //! or you want to explain your approach, write it down after the comments
 //! section. If you had no major issues and everything works, there is no need to write any comments.
 //!
-//! COMPLETED: ?
+//! COMPLETED: YES
 //!
 //! COMMENTS:
 //!
@@ -24,13 +24,15 @@
 //!
 
 use cplfs_api::controller::Device;
-use cplfs_api::fs::{BlockSupport, FileSysSupport, InodeSupport, DirectorySupport, InodeRWSupport};
-use cplfs_api::types::{Block, FType, Inode, SuperBlock, DirEntry, DIRENTRY_SIZE, DIRNAME_SIZE, DInode, InodeLike, Buffer};
+use cplfs_api::fs::{BlockSupport, DirectorySupport, FileSysSupport, InodeRWSupport, InodeSupport};
+use cplfs_api::types::{
+    Block, Buffer, DInode, DirEntry, FType, Inode, InodeLike, SuperBlock, DIRENTRY_SIZE,
+    DIRNAME_SIZE,
+};
 use std::path::Path;
 
 use super::error_fs::DirLayerError;
 use crate::b_inode_support::InodeLayerFS;
-use std::cmp::min;
 
 /// You are free to choose the name for your file system. As we will use
 /// automated tests when grading your assignment, indicate here the name of
@@ -43,14 +45,9 @@ pub type FSName = DirLayerFS;
 #[derive(Debug)]
 pub struct DirLayerFS {
     inode_fs: InodeLayerFS,
-
 }
 
 impl DirLayerFS {
-    fn sup_as_ref(&self) -> &SuperBlock {
-        return self.inode_fs.sup_as_ref();
-    }
-
     fn eq_str_char_arr(&self, string: &str, arr: &[char]) -> bool {
         let arrlen = arr.iter().filter(|&c| *c != '\0').count();
         if string.len() != arrlen {
@@ -64,13 +61,27 @@ impl DirLayerFS {
         true
     }
 
-    fn get_dir_entry(&self, inode: &<Self as InodeSupport>::Inode, idx: u64) -> Result<DirEntry, <Self as FileSysSupport>::Error> {
+    fn get_dir_entry(
+        &self,
+        inode: &<Self as InodeSupport>::Inode,
+        idx: u64,
+    ) -> Result<DirEntry, <Self as FileSysSupport>::Error> {
         let mut buf = Buffer::new_zero(*DIRENTRY_SIZE);
-        self.inode_fs.i_read(inode, &mut buf, idx*(*DIRENTRY_SIZE),*DIRENTRY_SIZE)?;
+        self.inode_fs
+            .i_read(inode, &mut buf, idx * (*DIRENTRY_SIZE), *DIRENTRY_SIZE)?;
         Ok(buf.deserialize_from::<DirEntry>(0)?)
     }
-}
 
+    /// checks if a string represents a valid directory name
+    pub fn is_valid_dir_name(name: &str) -> bool {
+        //println!("Checking {}", name);
+        name == ".."
+            || name == "."
+            || (name.len() != 0
+                && name.len() <= DIRNAME_SIZE
+                && name.chars().all(char::is_alphanumeric))
+    }
+}
 
 impl FileSysSupport for DirLayerFS {
     type Error = DirLayerError;
@@ -81,22 +92,17 @@ impl FileSysSupport for DirLayerFS {
 
     fn mkfs<P: AsRef<Path>>(path: P, sb: &SuperBlock) -> Result<Self, Self::Error> {
         let mut inode_fs = InodeLayerFS::mkfs(path, sb)?;
-        let root = <<Self as InodeSupport>::Inode as InodeLike>::new(
-            1,
-            &FType::TDir,
-            1,
-            0,
-            &[]
-        ).ok_or(DirLayerError::DirLayerOp("Couldn't initialize the filesystem"))?;
+        let root = <<Self as InodeSupport>::Inode as InodeLike>::new(1, &FType::TDir, 1, 0, &[])
+            .ok_or(DirLayerError::DirLayerOp(
+                "Couldn't initialize the filesystem",
+            ))?;
         inode_fs.i_put(&root)?;
-        Ok(DirLayerFS {
-            inode_fs
-        })
+        Ok(DirLayerFS { inode_fs })
     }
 
     fn mountfs(dev: Device) -> Result<Self, Self::Error> {
         Ok(DirLayerFS {
-            inode_fs: InodeLayerFS::mountfs(dev)?
+            inode_fs: InodeLayerFS::mountfs(dev)?,
         })
     }
 
@@ -132,7 +138,8 @@ impl BlockSupport for DirLayerFS {
 
     fn sup_put(&mut self, sup: &SuperBlock) -> Result<(), Self::Error> {
         Ok(self.inode_fs.sup_put(sup)?)
-    }}
+    }
+}
 
 impl InodeSupport for DirLayerFS {
     type Inode = Inode;
@@ -161,18 +168,20 @@ impl InodeSupport for DirLayerFS {
 impl DirectorySupport for DirLayerFS {
     fn new_de(inum: u64, name: &str) -> Option<DirEntry> {
         if name.len() == 0 {
-            return Option::None
+            return Option::None;
         }
         let mut dir_entry = DirEntry {
             inum,
-            name: Default::default()
+            name: Default::default(),
         };
-        Self::set_name_str(&mut dir_entry, name);
-        Option::Some(dir_entry)
+        match Self::set_name_str(&mut dir_entry, name) {
+            None => Option::None,
+            Some(_) => Option::Some(dir_entry),
+        }
     }
 
     fn get_name_str(de: &DirEntry) -> String {
-        let mut name :String = "".to_string();
+        let mut name: String = "".to_string();
         for ch in de.name.iter() {
             if *ch == '\0' {
                 break;
@@ -183,67 +192,86 @@ impl DirectorySupport for DirLayerFS {
     }
 
     fn set_name_str(de: &mut DirEntry, name: &str) -> Option<()> {
-        if name.len() == 0 || name.len() > DIRNAME_SIZE || !name.chars().all(char::is_alphanumeric) {
+        if !Self::is_valid_dir_name(name) {
             return Option::None;
         }
-        for (i,c) in name.chars().enumerate() {
+        for (i, c) in name.chars().enumerate() {
             de.name[i] = c;
         }
-        if name.len() < DIRNAME_SIZE -1 {
-            de.name[name.len()+1] = '\0';
+        if name.len() < DIRNAME_SIZE - 1 {
+            de.name[name.len() + 1] = '\0';
         }
         Option::Some(())
     }
 
-    fn dirlookup(&self, inode: &Self::Inode, name: &str) -> Result<(Self::Inode, u64), Self::Error> {
+    fn dirlookup(
+        &self,
+        inode: &Self::Inode,
+        name: &str,
+    ) -> Result<(Self::Inode, u64), Self::Error> {
         if inode.get_ft() != FType::TDir {
-            return Err(DirLayerError::DirLayerInput("The given inode does not represent a Directory"));
+            return Err(DirLayerError::DirLayerInput(
+                "The given inode does not represent a Directory",
+            ));
         }
         // start grabbing DirEntries and seeing if they are the one we are looking for
         let no_entries = inode.get_size() / (*DIRENTRY_SIZE);
-        //let mut buf = Buffer::new_zero(*DIRENTRY_SIZE);
         for i in 0..no_entries {
-            //self.inode_fs.i_read(inode, &mut buf, i*(*DIRENTRY_SIZE),*DIRENTRY_SIZE)?;
             let entry = self.get_dir_entry(inode, i)?;
             if self.eq_str_char_arr(name, &entry.name) {
-                return Ok((self.i_get(entry.inum)?, i*(*DIRENTRY_SIZE)));
+                return Ok((self.i_get(entry.inum)?, i * (*DIRENTRY_SIZE)));
             }
         }
         Err(DirLayerError::DirLookupNotFound())
     }
 
-    fn dirlink(&mut self, inode: &mut Self::Inode, name: &str, inum: u64) -> Result<u64, Self::Error> {
+    fn dirlink(
+        &mut self,
+        inode: &mut Self::Inode,
+        name: &str,
+        inum: u64,
+    ) -> Result<u64, Self::Error> {
         // First check if inode is a dir, doesn't contain an entry with 'name'
         // and the inode with 'inum' is already allocated
         if inode.get_ft() != FType::TDir {
-            return Err(DirLayerError::DirLayerInput("The given inode does not correspond to a directory"));
+            return Err(DirLayerError::DirLayerInput(
+                "The given inode does not correspond to a directory",
+            ));
         }
-        if self.dirlookup(inode, name).is_ok() {
-            return Err(DirLayerError::DirLayerInput("The given node contains a dir entry with the same name"));
+        match self.dirlookup(inode, name) {
+            Err(DirLayerError::DirLookupNotFound()) => {}
+            Ok(_) => {
+                return Err(DirLayerError::DirLayerInput(
+                    "The given node contains a dir entry with the same name",
+                ))
+            }
+            Err(e) => return Err(e),
         }
-        let mut queried_inode =  self.i_get(inum)?;
+        let mut queried_inode = self.i_get(inum)?;
         if queried_inode.get_ft() == FType::TFree {
-            return Err(DirLayerError::DirLayerInput("The given inum points to a free inode"));
+            return Err(DirLayerError::DirLayerInput(
+                "The given inum points to a free inode",
+            ));
         }
 
-        let entry = Self::new_de(inum, name)
-            .ok_or(DirLayerError::DirLayerOp("Could not initialize new dirEntry"))?;
+        let entry = Self::new_de(inum, name).ok_or(DirLayerError::DirLayerOp(
+            "Could not initialize new dirEntry",
+        ))?;
         let mut t_offest = inode.get_size();
 
         // try to see if there is some free DirEntry
         let no_entries = inode.get_size() / (*DIRENTRY_SIZE);
         for i in 0..no_entries {
             if self.get_dir_entry(inode, i)?.inum == 0 {
-                t_offest = i*(*DIRENTRY_SIZE);
+                t_offest = i * (*DIRENTRY_SIZE);
                 break;
             }
         }
 
         let mut buf = Buffer::new_zero(*DIRENTRY_SIZE);
         buf.serialize_into(&entry, 0)?;
-        println!("Inode before write: {:?}", inode);
-        self.inode_fs.i_write(inode, &buf, t_offest, *DIRENTRY_SIZE)?;
-        println!("Inode after write: {:?}", inode);
+        self.inode_fs
+            .i_write(inode, &buf, t_offest, *DIRENTRY_SIZE)?;
         if inum != inode.get_inum() {
             queried_inode.disk_node.nlink += 1;
             self.i_put(&queried_inode)?;
@@ -251,8 +279,6 @@ impl DirectorySupport for DirLayerFS {
         Ok(t_offest)
     }
 }
-
-// **TODO** define your own tests here.
 
 // WARNING: DO NOT TOUCH THE BELOW CODE -- IT IS REQUIRED FOR TESTING -- YOU WILL LOSE POINTS IF I MANUALLY HAVE TO FIX YOUR TESTS
 #[cfg(all(test, any(feature = "c", feature = "all")))]

@@ -14,6 +14,7 @@ version = "*"
 anyhow = "1.0.33" #Blanket error handling
 thiserror = "1.0.21" #Concise error definitions, avoiding boilerplate
 bit_field = "0.10.1" #bit manipulation
+relative-path="1.3.2" #lib to handle relative paths
 
 [features]
 # A feature with no dependencies is used mainly for conditional compilation,

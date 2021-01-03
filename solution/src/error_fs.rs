@@ -47,7 +47,7 @@ pub enum InodeLayerError {
 
     ///errors regarding writing operations of the FS
     #[error("Error while writing in InodeLayerFS: {0}")]
-    InodeLayerWrite(&'static str)
+    InodeLayerWrite(&'static str),
 }
 
 ///Error type used in the DirLayer
@@ -72,6 +72,20 @@ pub enum DirLayerError {
     ///errors regarding the internal state of the FS
     #[error("Directory entry not found")]
     DirLookupNotFound(),
+}
+
+///Error type used in the DirLayer
+#[derive(Error, Debug)]
+pub enum PathError {
+    ///errors from the Inode layer
+    #[error("Error in the DirectoryInode layer")]
+    DirectoryLayerError(#[from] DirLayerError),
+
+    #[error("Invalid Path Name: {0}")]
+    InvalidPathName(String),
+
+    #[error("Inode with name {0} is not a directory")]
+    InodeNotDir(String),
 }
 
 /*/// Define a generic alias for a `Result` with the error type `APIError`.
